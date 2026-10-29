@@ -29,7 +29,14 @@ database_name = "scanlake-auth"
 database_id = "d41e1a13-1951-429c-8d5e-f51f799d6544"
 migrations_dir = "migrations"
 
-# Daily cleanup of expired sessions.
+# Desktop login: 20 requests per minute per key (code exchange per IP, code issuing per account).
+# namespace_id is any account-unique number; nothing has to be created for it.
+[[ratelimits]]
+name = "DESKTOP_RATE_LIMIT"
+namespace_id = "2401"
+simple = { limit = 20, period = 60 }
+
+# Daily cleanup of expired sessions and desktop login codes.
 [triggers]
 crons = ["17 3 * * *"]
 
