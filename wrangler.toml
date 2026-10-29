@@ -1,0 +1,38 @@
+name = "scanlake-auth"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+
+# Served on the parent domain's subdomain so the session cookie (Domain=scanlake.rocks)
+# reaches every *.scanlake.rocks app.
+routes = [
+  { pattern = "auth.scanlake.rocks", custom_domain = true }
+]
+
+[vars]
+# OAuth2 client ID from the Discord Developer Portal (not a secret).
+DISCORD_CLIENT_ID = "1565351473255030895"
+# Public base URL of this worker; Discord redirects to ${PUBLIC_URL}/callback.
+PUBLIC_URL = "https://auth.scanlake.rocks"
+# The session cookie is set on this domain so all subdomains share the login.
+# Empty = host-only cookie (local dev on localhost).
+COOKIE_DOMAIN = "scanlake.rocks"
+# "true" also accepts http://localhost origins. Local dev only (.dev.vars).
+ALLOW_LOCALHOST = "false"
+
+# DISCORD_CLIENT_SECRET must be set as a secret:
+#   npx wrangler secret put DISCORD_CLIENT_SECRET
+
+[[d1_databases]]
+binding = "AUTH_DB"
+database_name = "scanlake-auth"
+# Replace with the id printed by: npx wrangler d1 create scanlake-auth
+database_id = "d41e1a13-1951-429c-8d5e-f51f799d6544"
+migrations_dir = "migrations"
+
+# Daily cleanup of expired sessions.
+[triggers]
+crons = ["17 3 * * *"]
+
+# Local dev port; 8787 (wrangler's default) is taken by ScanLake Store's dev server.
+[dev]
+port = 8788

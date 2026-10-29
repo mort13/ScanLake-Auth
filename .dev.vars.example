@@ -1,0 +1,7 @@
+# Copy to .dev.vars for `npm run dev` (wrangler dev on http://localhost:8788).
+# The Discord application needs http://localhost:8788/callback as a redirect.
+DISCORD_CLIENT_SECRET=
+PUBLIC_URL=http://localhost:8788
+# Host-only cookie on localhost. Cookies ignore ports, so apps on other localhost ports share it.
+COOKIE_DOMAIN=
+ALLOW_LOCALHOST=true
