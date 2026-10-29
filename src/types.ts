@@ -8,11 +8,16 @@ export interface Env {
   COOKIE_DOMAIN: string
   /** "true" also accepts http://localhost origins (local dev only). */
   ALLOW_LOCALHOST: string
+  /** Limits the desktop code exchange (per IP) and code issuing (per account). Optional. */
+  DESKTOP_RATE_LIMIT?: RateLimit
 }
+
+/** 'cookie' = web login (`sl_session` cookie), 'desktop' = bearer token held by a desktop app. */
+export type SessionKind = 'cookie' | 'desktop'
 
 export type AppEnv = {
   Bindings: Env
-  Variables: { discordId: string }
+  Variables: { discordId: string; sessionKind: SessionKind }
 }
 
 /** What `GET /api/me` returns: everything an app needs about the logged-in user. */

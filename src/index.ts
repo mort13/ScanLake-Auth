@@ -4,6 +4,7 @@ import { corsMiddleware, originGuard } from './middleware/cors'
 import { requireSession } from './middleware/requireSession'
 import { callbackRoute, loginRoute, logoutRoute } from './routes/oauth'
 import { deleteMeRoute, getMeRoute, linkUserIdRoute, saveProfileRoute } from './routes/me'
+import { authorizeDecisionRoute, authorizePageRoute, desktopHeaders, tokenRoute } from './routes/desktop'
 import { deleteExpiredSessions } from './services/session'
 
 const app = new Hono<AppEnv>()
@@ -16,7 +17,13 @@ app.get('/login', loginRoute)
 app.get('/callback', callbackRoute)
 app.post('/logout', logoutRoute)
 
-// ── Account API (fetch with credentials: 'include') ───────────────────────────
+// ── Desktop login (RFC 8252 loopback redirect + PKCE) ─────────────────────────
+app.use('/desktop/*', desktopHeaders)
+app.get('/desktop/authorize', authorizePageRoute)
+app.post('/desktop/authorize', authorizeDecisionRoute)
+app.post('/desktop/token', tokenRoute)
+
+// ── Account API (credentials: 'include', or Authorization: Bearer from desktop) ─
 app.use('/api/*', async (c, next) => {
   await next()
   c.header('Cache-Control', 'no-store')

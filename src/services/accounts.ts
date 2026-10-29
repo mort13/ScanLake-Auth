@@ -107,10 +107,14 @@ export async function saveProfile(
     .run()
 }
 
-/** Removes everything stored about the Discord user: account, linked IDs and sessions. */
+/**
+ * Removes everything stored about the Discord user: account, linked IDs, sessions
+ * (web and desktop) and unused desktop login codes.
+ */
 export async function deleteAccount(db: D1Database, discordId: string): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM sessions WHERE discord_id = ?').bind(discordId),
+    db.prepare('DELETE FROM desktop_codes WHERE discord_id = ?').bind(discordId),
     db.prepare('DELETE FROM user_ids WHERE discord_id = ?').bind(discordId),
     db.prepare('DELETE FROM accounts WHERE discord_id = ?').bind(discordId),
   ])
