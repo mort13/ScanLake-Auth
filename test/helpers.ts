@@ -20,7 +20,11 @@ export function call(path: string, init: RequestInit = {}): Promise<Response> {
 
 export async function resetDb(): Promise<void> {
   const db = env.AUTH_DB
+  // KV entries written for API keys, and the on/off switch
+  const { keys } = await env.API_KEYS.list()
+  await Promise.all(keys.map((k) => env.API_KEYS.delete(k.name)))
   await db.batch([
+    db.prepare('DELETE FROM api_keys'),
     db.prepare('DELETE FROM desktop_codes'),
     db.prepare('DELETE FROM sessions'),
     db.prepare('DELETE FROM user_ids'),

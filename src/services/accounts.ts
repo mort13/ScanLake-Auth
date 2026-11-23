@@ -1,4 +1,6 @@
-import type { Me } from '../types'
+import type { Env, Me } from '../types'
+import { isTier } from '../apikeys/tiers'
+import { deleteAccountKeys } from './apiKeys'
 import { avatarUrl, type DiscordUser } from './discord'
 import { nowS } from './session'
 
@@ -12,6 +14,7 @@ interface AccountRow {
   primary_user_id: string | null
   user_name: string
   org: string
+  api_tier: string
 }
 
 /** Creates the account on first login, or refreshes the Discord name and avatar. */
@@ -30,11 +33,11 @@ export async function upsertAccount(db: D1Database, user: DiscordUser): Promise<
     .run()
 }
 
-export async function loadMe(db: D1Database, discordId: string): Promise<Me | null> {
+export async function loadMe(db: D1Database, discordId: string, isAdmin: boolean): Promise<Me | null> {
   const [account, ids] = await db.batch([
     db
       .prepare(
-        `SELECT discord_id, username, global_name, avatar, primary_user_id, user_name, org
+        `SELECT discord_id, username, global_name, avatar, primary_user_id, user_name, org, api_tier
          FROM accounts WHERE discord_id = ?`,
       )
       .bind(discordId),
@@ -53,6 +56,8 @@ export async function loadMe(db: D1Database, discordId: string): Promise<Me | nu
     primaryUserId: row.primary_user_id,
     userIds: (ids.results as { user_id: string }[]).map((r) => r.user_id),
     profile: { userName: row.user_name, org: row.org },
+    apiTier: isTier(row.api_tier) ? row.api_tier : 'verified',
+    isAdmin,
   }
 }
 
@@ -109,10 +114,14 @@ export async function saveProfile(
 
 /**
  * Removes everything stored about the Discord user: account, linked IDs, sessions
- * (web and desktop) and unused desktop login codes.
+ * (web and desktop), unused desktop login codes, and Gateway API keys (their KV
+ * entries first, so the keys stop working even if the D1 batch fails).
  */
-export async function deleteAccount(db: D1Database, discordId: string): Promise<void> {
+export async function deleteAccount(env: Env, discordId: string): Promise<void> {
+  const db = env.AUTH_DB
+  await deleteAccountKeys(env, discordId)
   await db.batch([
+    db.prepare('DELETE FROM api_keys WHERE discord_id = ?').bind(discordId),
     db.prepare('DELETE FROM sessions WHERE discord_id = ?').bind(discordId),
     db.prepare('DELETE FROM desktop_codes WHERE discord_id = ?').bind(discordId),
     db.prepare('DELETE FROM user_ids WHERE discord_id = ?').bind(discordId),

@@ -36,7 +36,11 @@ A new app only has to be served from a `*.scanlake.rocks` subdomain; nothing cha
 | `GET /api/me` | 401 when logged out, else `{ discord: { id, username, globalName, avatarUrl }, primaryUserId, userIds, profile: { userName, org } }`. |
 | `POST /api/me/user-ids` `{ userId }` | Links a ScanLake userId (UUID v4). The first linked ID becomes the primary. 409 if another account owns it, 422 above 20 IDs. Returns the updated `me`. |
 | `PUT /api/me/profile` `{ userName, org }` | Stores the Capture profile (max 64 chars each). Returns the updated `me`. |
-| `DELETE /api/me` | Unlinks Discord: deletes the account, its linked IDs and its sessions, web and desktop (204). |
+| `DELETE /api/me` | Unlinks Discord: deletes the account, its linked IDs, its sessions (web and desktop) and its Gateway API keys (204). |
+| `GET /api/me/api-keys` | `{ tier, limits: { maxKeys, perMinute, perDay }, issuing, keys: [{ id, prefix, label, createdAt, revokedAt, revokedBy }] }`. See [Gateway API keys](#gateway-api-keys). |
+| `POST /api/me/api-keys` `{ label }` | Creates a key (201 `{ token, key }`; the token is only in this response). 403 when paused or blocked, 409 at the tier's key limit, 429 above 5 key changes per minute. |
+| `DELETE /api/me/api-keys/:id` | Revokes one of the account's keys (204, 404 if unknown). |
+| `/api/admin/*` | Admin panel API, see [Admin](#admin). |
 | `GET /desktop/authorize` | Desktop login, opened in the system browser. See [Desktop / native apps](#desktop--native-apps). |
 | `POST /desktop/authorize` | The Allow/Deny form on the desktop confirmation page. |
 | `POST /desktop/token` | The desktop app exchanges its one-time code for a bearer token. |
@@ -90,13 +94,44 @@ npx wrangler d1 execute scanlake-auth --remote --command "DELETE FROM sessions W
 
 `last_used_at` is updated at most once an hour.
 
+## Gateway API keys
+
+Logged-in users create their own keys for [ScanLake Gateway](https://gateway.scanlake.rocks) in the Dashboard's `/API` tab. A key reads only the public derived files (manifest, consolidated scans and compositions, `results/*.parquet`); the Gateway enforces that.
+
+- Token: `slk_` + 64 hex characters, shown once. D1 (`api_keys`) keeps only its SHA-256 and the first 12 characters.
+- Each active key has a KV entry `ukey:<sha256>` in the `API_KEYS` namespace shared with the Gateway: `{ kind: "user", ownerId, discordId, tier, active, limits: [{ limit, windowMs }], rateLimit, rateLimitWindowMs, maxUploadBytes: 0, allowedOrigins: [], scopes: ["derived:public"], createdAt }`. `ownerId` is the account's primary ScanLake userId (or `discord:<id>`). ScanLake Store reads the same namespace, but only `apikey:*` with `sk_` tokens, so user keys can't upload.
+- Revoking deletes the KV entry; the Gateway stops accepting the key within about a minute (KV caching).
+- Tiers live in `src/apikeys/tiers.ts`. Limits count per account, shared by all its keys:
+
+| Tier | Who | Active keys | Requests/min | Requests/day |
+|---|---|---|---|---|
+| `verified` | every Discord account (default) | 2 | 60 | 2,000 |
+| `trusted` | set by an admin | 5 | 600 | 20,000 |
+| `blocked` | set by an admin | 0, all keys revoked | – | – |
+
+- Switch `config:user-keys` = `{ "issuing": bool, "serving": bool }` in the same KV (missing = both on): `issuing: false` stops new keys, `serving: false` makes the Gateway refuse every user key.
+
+## Admin
+
+Discord IDs in `ADMIN_DISCORD_IDS` (`wrangler.toml`, comma-separated) get `isAdmin: true` from `/api/me` and may call:
+
+| Route | Does |
+|---|---|
+| `GET /api/admin/api-keys` | Every user key with its account (Discord ID, username, display name, ScanLake userId, tier) and usage over 30 days (`requests24h/7d/30d`, `bytes30d`, `limited30d`, `lastUsedAt`, `daily[]`), the Gateway's other keys by owner (`internal`), summary counts, `settings` and the tier table. |
+| `POST /api/admin/api-keys/:id/revoke` | Revokes any key (204). |
+| `PUT /api/admin/accounts/:discordId/tier` `{ tier }` | `verified`, `trusted` or `blocked`. Rewrites the KV entries of the account's keys; `blocked` revokes them. |
+| `GET` / `PUT /api/admin/settings` `{ issuing?, serving? }` | The on/off switch. |
+
+Usage comes from the Analytics Engine dataset `USAGE_DATASET` (default `scanlake_gateway_usage`) that the Gateway writes one data point per request to, read through the `ANALYTICS_SQL` binding (no API token needed). That binding is remote only: under `wrangler dev` it queries the real account, and in tests it's never called. When it fails, the list still works with `usageAvailable: false` and `usageError`.
+
 ## Setup
 
 1. **Discord application:** in the [Discord Developer Portal](https://discord.com/developers/applications), create an application. Under **OAuth2 → Redirects**, add `https://auth.scanlake.rocks/callback` (and `http://localhost:8788/callback` for local dev). Copy the **Client ID** into `DISCORD_CLIENT_ID` in `wrangler.toml` and keep the **Client Secret** for step 4.
 2. **Database:** `npx wrangler d1 create scanlake-auth`, then put the printed `database_id` into `wrangler.toml`.
 3. **Tables:** `npm run db:migrate`
 4. **Secret:** `npx wrangler secret put DISCORD_CLIENT_SECRET`
-5. **Deploy:** `npm run deploy`. The `auth.scanlake.rocks` custom domain is created from `wrangler.toml`.
+5. **Admin:** put your Discord ID into `ADMIN_DISCORD_IDS` in `wrangler.toml`.
+6. **Deploy:** `npm run deploy`. The `auth.scanlake.rocks` custom domain is created from `wrangler.toml`.
 
 ## Local development
 

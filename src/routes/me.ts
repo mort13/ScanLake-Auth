@@ -2,17 +2,19 @@ import type { Context } from 'hono'
 import type { AppEnv } from '../types'
 import { clearSessionCookie } from '../services/session'
 import { MAX_USER_IDS, deleteAccount, linkUserId, loadMe, saveProfile } from '../services/accounts'
+import { isAdminId } from '../middleware/requireAdmin'
 
 // Same format the Store accepts for uploads
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const MAX_FIELD_LENGTH = 64
 
 async function meResponse(c: Context<AppEnv>) {
-  const me = await loadMe(c.env.AUTH_DB, c.get('discordId'))
+  const discordId = c.get('discordId')
+  const me = await loadMe(c.env.AUTH_DB, discordId, isAdminId(c.env, discordId))
   return me ? c.json(me) : c.json({ error: 'Not logged in' }, 401)
 }
 
-async function readJson(c: Context<AppEnv>): Promise<Record<string, unknown>> {
+export async function readJson(c: Context<AppEnv>): Promise<Record<string, unknown>> {
   try {
     const body = await c.req.json<unknown>()
     return body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
@@ -59,7 +61,7 @@ export async function saveProfileRoute(c: Context<AppEnv>) {
 
 /** `DELETE /api/me`: unlinks Discord by deleting everything stored about the account. */
 export async function deleteMeRoute(c: Context<AppEnv>) {
-  await deleteAccount(c.env.AUTH_DB, c.get('discordId'))
+  await deleteAccount(c.env, c.get('discordId'))
   clearSessionCookie(c)
   return c.body(null, 204)
 }

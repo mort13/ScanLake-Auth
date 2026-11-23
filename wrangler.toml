@@ -18,6 +18,10 @@ PUBLIC_URL = "https://auth.scanlake.rocks"
 COOKIE_DOMAIN = "scanlake.rocks"
 # "true" also accepts http://localhost origins. Local dev only (.dev.vars).
 ALLOW_LOCALHOST = "false"
+# Discord IDs (comma-separated) that may use /api/admin/* (the Dashboard's /ADMIN tab). Not secret.
+ADMIN_DISCORD_IDS = "374907224469798922"
+# Analytics Engine dataset ScanLake Gateway writes its per-key request counts to.
+USAGE_DATASET = "scanlake_gateway_usage"
 
 # DISCORD_CLIENT_SECRET must be set as a secret:
 #   npx wrangler secret put DISCORD_CLIENT_SECRET
@@ -35,6 +39,25 @@ migrations_dir = "migrations"
 name = "DESKTOP_RATE_LIMIT"
 namespace_id = "2401"
 simple = { limit = 20, period = 60 }
+
+# Creating and revoking Gateway API keys: 5 per minute per account.
+[[ratelimits]]
+name = "API_KEY_RATE_LIMIT"
+namespace_id = "2405"
+simple = { limit = 5, period = 60 }
+
+# Gateway API keys, shared with ScanLake Gateway (and Store, which only reads `apikey:*`).
+# Auth writes `ukey:<sha256>` for keys users create and the `config:user-keys` switch.
+[[kv_namespaces]]
+binding = "API_KEYS"
+id = "ac8fe738c3014c49b0a986af12af23f9"
+preview_id = "b7c163bedd4644e8bd010e4d57252ca1"
+
+# Reads the Gateway's usage counts (Analytics Engine) for the admin panel. Always remote:
+# `wrangler dev` queries the real account (needs `wrangler login`); tests never call it.
+[analytics]
+binding = "ANALYTICS_SQL"
+remote = true
 
 # Daily cleanup of expired sessions and desktop login codes.
 [triggers]

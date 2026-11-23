@@ -5,6 +5,7 @@ import { isAllowedClientId, isAllowedRedirectUri } from '../desktop/redirect'
 import { isValidChallenge, isValidVerifier, verifyPkce } from '../services/pkce'
 import { createBearerSession, nowS, randomToken, readSession, sha256Hex } from '../services/session'
 import { loadMe } from '../services/accounts'
+import { isAdminId } from '../middleware/requireAdmin'
 
 // Desktop / native-app login: RFC 8252 loopback redirect + RFC 7636 PKCE (S256).
 // The browser half reuses the web login (cookie session); the app gets a bearer token.
@@ -152,7 +153,7 @@ function parseAuthorize(params: Record<string, unknown>): ParsedAuthorize {
 async function currentWebUser(c: Context<AppEnv>): Promise<Me | null> {
   const session = await readSession(c)
   if (!session || session.kind !== 'cookie') return null
-  return loadMe(c.env.AUTH_DB, session.discordId)
+  return loadMe(c.env.AUTH_DB, session.discordId, isAdminId(c.env, session.discordId))
 }
 
 async function readForm(c: Context<AppEnv>): Promise<Record<string, unknown>> {
